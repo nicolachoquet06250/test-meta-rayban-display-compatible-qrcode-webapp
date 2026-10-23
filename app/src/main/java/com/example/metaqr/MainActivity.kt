@@ -126,12 +126,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun renderGlasses() {
+        scope.launch { renderGlassesContent() }
+    }
+
+    private suspend fun renderGlassesContent() {
         val display = glassesDisplay ?: return
         if (!displayReady) return
         val code = lastCode
         if (!showingResult || code == null) {
             display.sendContent {
-                flexBox(direction = Direction.COLUMN, gap = 16, paddingAll = 20) {
+                flexBox(direction = Direction.COLUMN, gap = 16, paddingTop = 20, paddingBottom = 20, paddingStart = 20, paddingEnd = 20) {
                     text("QR SCANNER", style = TextStyle.HEADING)
                     text("Regardez un QR code avec vos lunettes.", style = TextStyle.BODY)
                     text("Recherche en cours...", style = TextStyle.META)
@@ -142,7 +146,7 @@ class MainActivity : ComponentActivity() {
         val imageUrl = QrContentClassifier.directImageUrl(code)
         val isLink = QrContentClassifier.isWebUrl(code)
         display.sendContent {
-            flexBox(direction = Direction.COLUMN, gap = 12, paddingAll = 20) {
+            flexBox(direction = Direction.COLUMN, gap = 12, paddingTop = 20, paddingBottom = 20, paddingStart = 20, paddingEnd = 20) {
                 text("QR DÉTECTÉ", style = TextStyle.HEADING)
                 text(if (imageUrl != null) "Image" else if (isLink) "Lien web" else "Contenu", style = TextStyle.META)
                 if (imageUrl != null) {
