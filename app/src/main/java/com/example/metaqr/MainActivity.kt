@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
     private var camera: Camera? = null
     private var glassesDisplay: Display? = null
     private var displayJob: Job? = null
+    private var renderJob: Job? = null
     private var showingResult = false
     private var displayReady = false
     private var streamJob: Job? = null
@@ -117,7 +118,12 @@ class MainActivity : ComponentActivity() {
                 displayJob = scope.launch {
                     display.state.collect { state ->
                         displayReady = state == DisplayState.STARTED
-                        if (displayReady) renderGlasses()
+                        if (displayReady) {
+                            status.text = "Écran des lunettes prêt"
+                            renderGlasses()
+                        } else {
+                            status.text = "Écran lunettes : $state"
+                        }
                     }
                 }
             },
@@ -126,7 +132,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun renderGlasses() {
-        scope.launch { renderGlassesContent() }
+        // Prevent older asynchronous content sends from overwriting the current screen.
+        renderJob?.cancel()
+        renderJob = scope.launch { renderGlassesContent() }
     }
 
     private suspend fun renderGlassesContent() {
@@ -147,7 +155,10 @@ class MainActivity : ComponentActivity() {
         val isLink = QrContentClassifier.isWebUrl(code)
         display.sendContent {
             flexBox(direction = Direction.COLUMN, gap = 12, paddingTop = 20, paddingBottom = 20, paddingStart = 20, paddingEnd = 20) {
-                text("QR DÉTECTÉ", style = TextStyle.HEADING)
+                flexBox(direction = Direction.ROW, gap = 12) {
+                    text("QR DÉTECTÉ", style = TextStyle.HEADING)
+                    button(label = "✕", style = ButtonStyle.OUTLINE, onClick = { runOnUiThread { backToScanner() } })
+                }
                 text(if (imageUrl != null) "Image" else if (isLink) "Lien web" else "Contenu", style = TextStyle.META)
                 if (imageUrl != null) {
                     image(uri = imageUrl, sizePreset = ImageSize.FILL)
@@ -155,7 +166,7 @@ class MainActivity : ComponentActivity() {
                 // All formats are preserved as text, including URLs and non-displayable payloads.
                 text(code.take(1500), style = TextStyle.BODY)
                 if (code.length > 1500) text("Contenu complet disponible sur le téléphone.", style = TextStyle.META)
-                button(label = "Retour au scanner", style = ButtonStyle.PRIMARY, onClick = { runOnUiThread { backToScanner() } })
+                button(label = "✕ Fermer et scanner", style = ButtonStyle.PRIMARY, onClick = { runOnUiThread { backToScanner() } })
             }
         }.onFailure { error, _ -> status.text = "Écran : ${error.description}" }
     }
@@ -196,6 +207,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopScanner() {
+        renderJob?.cancel(); renderJob = null
         displayJob?.cancel(); displayJob = null
         displayReady = false
         glassesDisplay?.stop(); glassesDisplay = null
