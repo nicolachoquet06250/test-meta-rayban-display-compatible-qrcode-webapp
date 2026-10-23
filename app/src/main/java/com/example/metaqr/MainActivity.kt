@@ -16,7 +16,7 @@ import android.widget.TextView
 import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.selectors.AutoDeviceSelector
 import com.meta.wearable.dat.core.session.DeviceSession
-import com.meta.wearable.dat.core.types.DeviceSessionState
+import com.meta.wearable.dat.core.session.DeviceSessionState
 import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.camera.addCamera
 import com.meta.wearable.dat.camera.Camera
