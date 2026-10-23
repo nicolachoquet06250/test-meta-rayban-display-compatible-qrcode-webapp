@@ -1,9 +1,3 @@
-# web app
-node_modules/
-dist/
-*.tsbuildinfo
-
-# android app
 .gradle/
 .idea/
 build/
