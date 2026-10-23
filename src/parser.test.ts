@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {parseQR} from './parser.ts';
+test('URL HTTPS',()=>{assert.equal(parseQR('https://example.org/x').kind,'url');assert.equal(parseQR('https://example.org').secure,true)});
+test('URL HTTP not secure',()=>assert.equal(parseQR('http://example.org').secure,false));
+test('wifi',()=>{const p=parseQR('WIFI:T:WPA;S:Home;P:secret;;');assert.equal(p.kind,'wifi');assert.equal(p.title,'Home');assert.ok(!JSON.stringify(p.details).includes('secret'))});
+test('vCard',()=>assert.equal(parseQR('BEGIN:VCARD\nFN:Alice\nEND:VCARD').title,'Alice'));
+test('email',()=>assert.equal(parseQR('mailto:a@example.org').kind,'email'));
+test('phone',()=>assert.equal(parseQR('tel:+33123456789').kind,'phone'));
+test('javascript treated as text',()=>assert.equal(parseQR('javascript:alert(1)').kind,'text'));
+test('too long',()=>assert.equal(parseQR('a'.repeat(8193)).kind,'error'));

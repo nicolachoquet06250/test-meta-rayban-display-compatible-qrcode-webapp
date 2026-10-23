@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "name": "QR Lens",
+  "description": "Lecture et traitement de données QR reçues depuis une source externe.",
+  "appearance": {
+    "theme_color": "#168D75",
+    "icon": {"src":"../icons/qr-lens.svg"}
+  }
+}
