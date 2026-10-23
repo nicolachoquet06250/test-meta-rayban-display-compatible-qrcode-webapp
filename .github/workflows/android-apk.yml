@@ -24,12 +24,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Project contains a custom bootstrap jar, not the official Gradle wrapper.
-      # Use the Gradle distribution installed by this trusted GitHub Action.
+      # Gradle will generate the official wrapper, never a custom bootstrap JAR.
       - name: Set up Gradle 8.11.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
+
+      - name: Generate official Gradle Wrapper
+        run: |
+          gradle wrapper --gradle-version 8.11.1 --distribution-type bin
+          echo "2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check
+          chmod +x gradlew
 
       - name: Install Android SDK 35
         run: |
@@ -39,10 +44,10 @@ jobs:
       - name: Show toolchain
         run: |
           java -version
-          gradle --version
+          ./gradlew --version
 
       - name: Unit tests and APK build
-        run: gradle --no-daemon --stacktrace testDebugUnitTest assembleDebug
+        run: ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug
 
       - name: Upload APK artifact
         if: success()
