@@ -22,6 +22,10 @@ import com.meta.wearable.dat.camera.addCamera
 import com.meta.wearable.dat.camera.Camera
 import com.meta.wearable.dat.camera.types.StreamConfiguration
 import com.meta.wearable.dat.camera.types.VideoQuality
+import com.meta.wearable.dat.display.*
+import com.meta.wearable.dat.display.types.*
+import com.meta.wearable.dat.display.views.*
+import android.net.Uri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,6 +45,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var result: TextView
     private var session: DeviceSession? = null
     private var camera: Camera? = null
+    private var glassesDisplay: Display? = null
+    private var displayJob: Job? = null
+    private var showingResult = false
+    private var displayReady = false
     private var streamJob: Job? = null
     private var stateJob: Job? = null
     private var busy = false
@@ -56,7 +64,8 @@ class MainActivity : ComponentActivity() {
         fun action(label: String, block: () -> Unit) { layout.addView(Button(this).apply { text = label; setOnClickListener { block() } }) }
         action("1 · Connecter les lunettes") { Wearables.startRegistration(this) }
         action("2 · Autoriser la caméra") { permissionLauncher.launch(Permission.CAMERA) }
-        action("3 · Scanner les QR codes") { startScanner() }
+        action("3 · Ouvrir le scanner dans les lunettes") { startScanner() }
+        action("Retour au scanner") { backToScanner() }
         action("Arrêter le scanner") { stopScanner() }
         action("Copier le dernier QR code") {
             lastCode?.let { (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("QR", it)) }
@@ -75,14 +84,23 @@ class MainActivity : ComponentActivity() {
 
     private fun startScanner() {
         stopScanner()
+        showingResult = false
+        lastCode = null
         Wearables.createSession(AutoDeviceSelector()).fold(
             onSuccess = { s ->
                 session = s
                 stateJob = scope.launch {
                     s.state.collect { state ->
                         status.text = "Session : $state"
-                        if (state == DeviceSessionState.STARTED && camera == null) attachCamera(s)
-                        if (state == DeviceSessionState.STOPPED) camera = null
+                        if (state == DeviceSessionState.STARTED) {
+                            if (glassesDisplay == null) attachDisplay(s)
+                            if (camera == null) attachCamera(s)
+                        }
+                        if (state == DeviceSessionState.STOPPED) {
+                            camera = null
+                            glassesDisplay = null
+                            displayReady = false
+                        }
                     }
                 }
                 s.start()
@@ -91,20 +109,77 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private fun attachDisplay(s: DeviceSession) {
+        s.addDisplay(DisplayConfiguration()).fold(
+            onSuccess = { display ->
+                glassesDisplay = display
+                displayJob?.cancel()
+                displayJob = scope.launch {
+                    display.state.collect { state ->
+                        displayReady = state == DisplayState.STARTED
+                        if (displayReady) renderGlasses()
+                    }
+                }
+            },
+            onFailure = { error, _ -> status.text = "Affichage lunettes : ${error.description}" }
+        )
+    }
+
+    private fun renderGlasses() {
+        val display = glassesDisplay ?: return
+        if (!displayReady) return
+        val code = lastCode
+        if (!showingResult || code == null) {
+            display.sendContent {
+                flexBox(direction = Direction.COLUMN, gap = 16, paddingAll = 20) {
+                    text("QR SCANNER", style = TextStyle.HEADING)
+                    text("Regardez un QR code avec vos lunettes.", style = TextStyle.BODY)
+                    text("Recherche en cours...", style = TextStyle.META)
+                }
+            }.onFailure { error, _ -> status.text = "Écran : ${error.description}" }
+            return
+        }
+        val imageUrl = QrContentClassifier.directImageUrl(code)
+        val isLink = QrContentClassifier.isWebUrl(code)
+        display.sendContent {
+            flexBox(direction = Direction.COLUMN, gap = 12, paddingAll = 20) {
+                text("QR DÉTECTÉ", style = TextStyle.HEADING)
+                text(if (imageUrl != null) "Image" else if (isLink) "Lien web" else "Contenu", style = TextStyle.META)
+                if (imageUrl != null) {
+                    image(uri = imageUrl, sizePreset = ImageSize.FILL)
+                }
+                // All formats are preserved as text, including URLs and non-displayable payloads.
+                text(code.take(1500), style = TextStyle.BODY)
+                if (code.length > 1500) text("Contenu complet disponible sur le téléphone.", style = TextStyle.META)
+                button(label = "Retour au scanner", style = ButtonStyle.PRIMARY, onClick = { runOnUiThread { backToScanner() } })
+            }
+        }.onFailure { error, _ -> status.text = "Écran : ${error.description}" }
+    }
+
+    private fun backToScanner() {
+        showingResult = false
+        lastCode = null
+        result.text = "Aucun QR code détecté"
+        status.text = "Recherche QR code..."
+        renderGlasses()
+    }
+
     private fun attachCamera(s: DeviceSession) {
         s.addCamera(StreamConfiguration(videoQuality = VideoQuality.MEDIUM, frameRate = 15, compressVideo = false)).fold(
             onSuccess = { c ->
                 camera = c
                 streamJob = scope.launch {
                     c.stream.videoStream.collect { frame ->
-                        if (frame.isCompressed || busy) return@collect
+                        if (frame.isCompressed || busy || showingResult) return@collect
                         busy = true
                         try {
                             val decoded = withContext(Dispatchers.Default) { QrFrameDecoder.scan(frame.buffer, frame.width, frame.height) }
-                            if (!decoded.isNullOrBlank() && decoded != lastCode) {
+                            if (!decoded.isNullOrBlank() && !showingResult) {
+                                showingResult = true
                                 lastCode = decoded
                                 result.text = decoded
                                 status.text = "QR code détecté"
+                                renderGlasses()
                             }
                         } catch (e: Exception) { status.text = "Décodage : ${e.message}" }
                         finally { busy = false }
@@ -117,6 +192,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopScanner() {
+        displayJob?.cancel(); displayJob = null
+        displayReady = false
+        glassesDisplay?.stop(); glassesDisplay = null
         streamJob?.cancel(); streamJob = null
         stateJob?.cancel(); stateJob = null
         camera?.stop(); camera = null

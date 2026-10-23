@@ -151,3 +151,9 @@ La compilation Android en CI doit réussir avant de considérer le binaire comme
 - [Meta Wearables DAT — streaming caméra](https://wearables.developer.meta.com/docs/develop/dat/streaming)
 - [Meta Wearables — Web Apps](https://wearables.developer.meta.com/docs/develop/webapps/)
 - [Gradle Wrapper](https://docs.gradle.org/current/userguide/gradle_wrapper.html)
+
+## Affichage dans les lunettes (DAT Display)
+
+Le module Android attache `mwdat-display` à la même session que la caméra. Après avoir ouvert l'application sur le téléphone et lancé **Ouvrir le scanner dans les lunettes**, les lunettes affichent « Recherche en cours ». Quand un QR est détecté, la vue change : texte du QR, ou image pour une URL HTTPS pointant directement vers `.jpg`, `.png`, `.webp`, `.gif`. Pour les URL Web, PDF, données Wi-Fi, vCard et tous autres contenus, la valeur QR brute est affichée comme texte ; la page Web ou le fichier n'est pas exécuté/rendu nativement. Appuyez sur **Retour au scanner** à l'écran pour réarmer la détection. Le geste système Retour à deux doigts ferme la session d'affichage et n'est pas ce bouton.
+
+Limites : ouverture initiale via le téléphone (aucun point d'entrée autonome dans le lanceur des lunettes n'est établi), pas de rendu universel de fichiers ni d'exécution de liens, et pas de validation sur matériel réel.

@@ -18,6 +18,7 @@ android {
 dependencies {
     implementation("com.meta.wearable:mwdat-core:1.0.0")
     implementation("com.meta.wearable:mwdat-camera:1.0.0")
+    implementation("com.meta.wearable:mwdat-display:1.0.0")
     implementation("com.google.mlkit:barcode-scanning:17.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("androidx.activity:activity-ktx:1.10.1")
