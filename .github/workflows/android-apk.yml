@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build:
-    name: Build debug APK (JDK 17)
+    name: Build Android APKs (JDK 17)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -24,7 +24,6 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Gradle will generate the official wrapper, never a custom bootstrap JAR.
       - name: Set up Gradle 8.11.1
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -41,19 +40,58 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Show toolchain
-        run: |
-          java -version
-          ./gradlew --version
-
-      - name: Unit tests and APK build
+      - name: Unit tests and debug APK
         run: ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug
 
-      - name: Upload APK artifact
-        if: success()
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: meta-rayban-qr-scanner-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      # No signing secrets are exposed to pull request workflows.
+      - name: Restore release keystore
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for key in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::Missing GitHub Actions secret: $key"
+              exit 1
+            fi
+          done
+          umask 077
+          keystore="$RUNNER_TEMP/metaqr-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          test -s "$keystore"
+          echo "ANDROID_KEYSTORE_PATH=$keystore" >> "$GITHUB_ENV"
+
+      - name: Build signed release APK
+        if: github.event_name != 'pull_request'
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon --stacktrace assembleRelease
+
+      - name: Verify release APK signature
+        if: github.event_name != 'pull_request'
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs             app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload signed release APK
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: meta-rayban-qr-scanner-release-signed-apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30

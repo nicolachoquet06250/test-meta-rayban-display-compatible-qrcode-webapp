@@ -1,6 +1,12 @@
 .gradle/
+gradle/
 .idea/
 build/
 **/build/
 local.properties
 *.iml
+
+# Android signing material
+*/**.jks
+*/**.keystore
+*/**.base64

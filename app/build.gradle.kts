@@ -1,4 +1,16 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android") }
+
+val signingKeystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+val signingKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val signingKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+val signingKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    signingKeystorePath,
+    signingKeystorePassword,
+    signingKeyAlias,
+    signingKeyPassword,
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.example.metaqr"
     compileSdk = 35
@@ -12,9 +24,28 @@ android {
         manifestPlaceholders["mwdat_client_token"] = providers.gradleProperty("mwdat_client_token").orElse("0").get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("ciRelease") {
+                storeFile = file(requireNotNull(signingKeystorePath))
+                storePassword = signingKeystorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("ciRelease")
+            }
+        }
+    }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
 }
+
 dependencies {
     implementation("com.meta.wearable:mwdat-core:1.0.0")
     implementation("com.meta.wearable:mwdat-camera:1.0.0")
